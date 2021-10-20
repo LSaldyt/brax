@@ -18,7 +18,8 @@ from brax.experimental.braxlines.common import sim_utils
 from brax.experimental.composer.components.ant import DEFAULT_OBSERVERS
 from brax.experimental.composer.components.ant import height_term_fn
 from brax.experimental.composer.components.ant import ROOT
-from brax.physics import math
+# from brax.physics import math
+from brax import math
 from jax import numpy as jnp
 import numpy as np
 
