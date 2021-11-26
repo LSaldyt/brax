@@ -24,7 +24,7 @@ from setuptools import setup
 
 setup(
     name="brax",
-    version="0.0.6",
+    version="0.0.7",
     description=("A differentiable physics engine written in JAX."),
     author="Brax Authors",
     author_email="no-reply@google.com",
@@ -37,18 +37,18 @@ setup(
     scripts=["bin/learn"],
     install_requires=[
         "absl-py",
-        "clu",
         "dataclasses",
         "flax",
         "gym",
         "grpcio",
-        "jax<=0.2.21",  # tensorflow_probability breaks on jax 0.2.22
+        "jax",
         "jaxlib",
         "numpy",
         "optax",
         "Pillow",
         "pytinyrenderer",
-        "tensorflow_probability[jax]",
+        "tensorboardX",
+        "trimesh",
     ],
     extras_require={
         "develop": ["pytest", "transforms3d"],
@@ -62,4 +62,7 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
     keywords="JAX reinforcement learning rigidbody physics",
+    data_files=[
+        ("testdata", ["brax/tests/testdata/cylinder.stl"])
+    ],
 )

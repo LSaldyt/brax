@@ -14,12 +14,15 @@
 
 """Core brax structs and some conversion and slicing functions."""
 
-from typing import Tuple
+import os
+from typing import Optional, Sequence, Tuple
 
 from brax import jumpy as jp
 from brax import math
+from brax.io import file
 from brax.physics import config_pb2
 from flax import struct
+from trimesh.exchange.load import load_mesh
 
 
 @struct.dataclass
@@ -99,12 +102,12 @@ class QP(object):
     return QP(self.pos * o, self.rot * o, self.vel * o, self.ang * o)
 
   @classmethod
-  def zero(cls):
+  def zero(cls, shape=()):
     return cls(
-        pos=jp.zeros(3),
-        rot=jp.array([1., 0., 0., 0]),
-        vel=jp.zeros(3),
-        ang=jp.zeros(3))
+        pos=jp.zeros(shape + (3,)),
+        rot=jp.tile(jp.array([1., 0., 0., 0]), reps=shape + (1,)),
+        vel=jp.zeros(shape + (3,)),
+        ang=jp.zeros(shape + (3,)))
 
   def to_world(self, rpos: jp.ndarray) -> Tuple[jp.ndarray, jp.ndarray]:
     """Returns world information about a point relative to a part.
@@ -144,7 +147,9 @@ class Info(object):
   actuator: P
 
 
-def validate_config(config: config_pb2.Config) -> config_pb2.Config:
+def validate_config(
+    config: config_pb2.Config,
+    resource_paths: Optional[Sequence[str]] = None) -> config_pb2.Config:
   """Validate and normalize config settings for use in systems."""
   if config.dt <= 0:
     raise RuntimeError("config.dt must be positive")
@@ -162,6 +167,34 @@ def validate_config(config: config_pb2.Config) -> config_pb2.Config:
   find_dupes(config.bodies)
   find_dupes(config.joints)
   find_dupes(config.actuators)
+  find_dupes(config.mesh_geometries)
+
+  # Load the meshes.
+  if resource_paths is None:
+    resource_paths = [""]
+  for mesh_geom in config.mesh_geometries:
+    if mesh_geom.path:
+      # Clear the vertices and faces, if any.
+      del mesh_geom.vertices[:]
+      del mesh_geom.faces[:]
+      found = False
+      for resource_path in resource_paths:
+        path = os.path.join(resource_path, mesh_geom.path)
+        if not file.Exists(path):
+          continue
+        with file.File(path, "rb") as f:
+          trimesh = load_mesh(f, file_type=str(mesh_geom.path))
+          for v in trimesh.vertices:
+            mesh_geom.vertices.add(x=v[0], y=v[1], z=v[2])
+          mesh_geom.faces.extend(trimesh.faces.flatten())
+          for v in trimesh.vertex_normals:
+            mesh_geom.vertex_normals.add(x=v[0], y=v[1], z=v[2])
+          for v in trimesh.face_normals:
+            mesh_geom.face_normals.add(x=v[0], y=v[1], z=v[2])
+        found = True
+        break
+      assert found, f"{mesh_geom.path} is missing."
+      mesh_geom.ClearField("path")  # Clear the path.
 
   # TODO: more config validation
 
@@ -195,6 +228,13 @@ def validate_config(config: config_pb2.Config) -> config_pb2.Config:
         b.frozen.rotation.x, b.frozen.rotation.y, b.frozen.rotation.z
     ]):
       b.frozen.all = True
+
+    # insert material properties to colliders
+    for c in b.colliders:
+      if not c.HasField("material"):
+        c.material.friction = config.friction
+        c.material.elasticity = config.elasticity
+
   frozen.all = all(b.frozen.all for b in config.bodies)
 
   return config

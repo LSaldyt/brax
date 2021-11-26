@@ -73,8 +73,12 @@ class Hopper(brax_env.Env):
 
   def reset(self, rng: jp.ndarray) -> brax_env.State:
     """Resets the environment to an initial state."""
-    qp = self.sys.default_qp()
-    qp, _ = self.sys.step(qp, jp.random_uniform(rng, (self.action_size,)) * .5)
+    rng, rng1, rng2 = jp.random_split(rng, 3)
+    qpos = self.sys.default_angle() + jp.random_uniform(
+        rng1, (self.sys.num_joint_dof,), -.005, .005)
+    qvel = jp.random_uniform(rng2, (self.sys.num_joint_dof,), -.005, .005)
+    qp = self.sys.default_qp(joint_angle=qpos, joint_velocity=qvel)
+    info = self.sys.info(qp)
     obs = self._get_obs(qp)
     reward, done, zero = jp.zeros(3)
     metrics = {
@@ -252,7 +256,7 @@ actuators {
   strength: 200.0
   torque {}
 }
-friction: 0.9
+friction: 0.94868329805
 gravity { z: -9.81 }
 velocity_damping: 1.0
 angular_damping: -0.05

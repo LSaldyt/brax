@@ -38,7 +38,7 @@ def _in_jit() -> bool:
 def _which_np(*args):
   """Returns np or jnp depending on args."""
   for a in args:
-    if isinstance(a, jnp.ndarray):
+    if isinstance(a, jnp.ndarray) and not isinstance(a, onp.ndarray):
       return jnp
   return onp
 
@@ -105,7 +105,7 @@ def take(tree: Any, i: Union[ndarray, Sequence[int]], axis: int = 0) -> Any:
   """Returns tree sliced by i."""
   np = _which_np(i)
   if isinstance(i, list) or isinstance(i, tuple):
-    i = np.array(i)
+    i = np.array(i, dtype=int)
   return jax.tree_map(lambda x: np.take(x, i, axis=axis, mode='clip'), tree)
 
 
@@ -195,6 +195,11 @@ def square(x: ndarray) -> ndarray:
   return _which_np(x).square(x)
 
 
+def tile(x: ndarray, reps: Union[Tuple[int, ...], int]) -> ndarray:
+  """Construct an array by repeating A the number of times given by reps."""
+  return _which_np(x).tile(x, reps)
+
+
 def repeat(a: ndarray, repeats: Union[int, ndarray]) -> ndarray:
   """Repeat elements of an array."""
   return _which_np(a, repeats).repeat(a, repeats=repeats)
@@ -274,12 +279,15 @@ def random_prngkey(seed: int) -> ndarray:
     return rng.integers(low=0, high=2**32, dtype='uint32', size=2)
 
 
-def random_uniform(rng: ndarray, shape: Tuple[int, ...] = ()) -> ndarray:
-  """Sample uniform random values in [minval, maxval) with given shape/dtype."""
+def random_uniform(rng: ndarray,
+                   shape: Tuple[int, ...] = (),
+                   low: Optional[float] = 0.0,
+                   high: Optional[float] = 1.0) -> ndarray:
+  """Sample uniform random values in [low, high) with given shape/dtype."""
   if _which_np(rng) is jnp:
-    return jax.random.uniform(rng, shape=shape)
+    return jax.random.uniform(rng, shape=shape, minval=low, maxval=high)
   else:
-    return onp.random.default_rng(rng).uniform(size=shape)
+    return onp.random.default_rng(rng).uniform(size=shape, low=low, high=high)
 
 
 def random_split(rng: ndarray, num: int = 2) -> ndarray:
@@ -382,3 +390,7 @@ def array(object: Any, dtype=None) -> ndarray:
     np = _which_np(object)  # object is not iterable (e.g. primitive type)
   return np.array(object, dtype)
 
+
+def abs(a: ndarray) -> ndarray:
+  """Calculate the absolute value element-wise."""
+  return _which_np(a).abs(a)
