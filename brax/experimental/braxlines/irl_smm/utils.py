@@ -177,6 +177,11 @@ class IRLDiscriminator(object):
       if self.nonnegative_reward:
         r += self.logits_clip_range
       r = jnp.sum(r, axis=-1)
+    elif self.reward_type == "rairl":
+      r = -dist.logits
+      if self.nonnegative_reward:
+        r -= self.logits_clip_range
+      r = jnp.sum(r, axis=-1)
     elif self.reward_type == "fairl":
       r = dist.logits
       r = jnp.exp(r) * -r
@@ -273,7 +278,6 @@ def disc_reward_fn(
   new_reward = disc.irl_reward(data, params)
   return jax.lax.stop_gradient(new_reward)
 
-
 def disc_loss_fn(
     data: StepData,
     udata: StepData,
@@ -291,6 +295,8 @@ def disc_loss_fn(
   d = disc.obs_act2data(d.obs[:d.actions.shape[0]], d.actions)
   d = jnp.reshape(d, [-1, d.shape[-1]])
   target_d = jnp.reshape(target_d, [-1, target_d.shape[-1]])
+  # This code reshapes the generated & target data
+  # Arguably this should be implemented elsewhere
   if balance_data and d.shape[0] != target_d.shape[0]:
     rng, loss_key = jax.random.split(rng)
     if d.shape[0] > target_d.shape[0]:
@@ -301,6 +307,7 @@ def disc_loss_fn(
       indices = jnp.arange(0, target_d.shape[0])
       indices = jax.random.shuffle(loss_key, indices)
       target_d = target_d[indices[:d.shape[0]]]
+  #
   disc_loss = -jnp.mean(
       disc.ll(d, jnp.zeros(d.shape[:-1] + (1,)), params=params))
   disc_loss += -jnp.mean(
